@@ -228,11 +228,11 @@
         <input type="number" id="target-contractions" value="25" min="1">
       </div>
       <div class="setting-group">
-        <label for="min-hold-time" class="help-label" title="The repetition won't automatically end until this duration is reached, even if you hit your target contractions.">Min. hold time [s] (optional)</label>
+        <label for="min-hold-time" class="help-label" title="The repetition won't automatically end until this duration is reached, even if you hit your target contractions or the max hold time after the first contraction has passed.">Min. hold time [s] (optional)</label>
         <input type="number" id="min-hold-time" placeholder="e.g. 60">
       </div>
       <div class="setting-group">
-        <label for="max-post-first" class="help-label" title="The repetition will automatically end this many seconds after your first logged contraction.">Max. hold time after first contraction [s] (optional)</label>
+        <label for="max-post-first" class="help-label" title="The repetition will automatically end this many seconds after your first logged contraction (unless the minimum hold time has not been met yet).">Max. hold time after first contraction [s] (optional)</label>
         <input type="number" id="max-post-first" placeholder="e.g. 60">
       </div>
       <div class="setting-group">
@@ -257,22 +257,24 @@
       <div class="timer" id="timer-display">0.0s</div>
       <div class="button-group">
         <button id="main-btn" class="btn-idle">Start Rep 1</button>
-        <button id="end-rep-btn" style="display: none;">End</button>
+        <button id="end-rep-btn" style="display: none;">End Rep</button>
       </div>
       <button id="reset-btn" style="display: none;">Reset Session</button>
     </div>
 
     <div class="card">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-        <h3 style="margin: 0;">Performance Chart</h3>
+        <h3 style="margin: 0;">Wonka Table Chart</h3>
         <button id="export-chart-btn" class="action-btn">Export Image</button>
       </div>
-      <canvas id="chart"></canvas>
+      <div id="chart-container" style="position: relative; width: 100%; height: 300px;">
+        <canvas id="chart"></canvas>
+      </div>
     </div>
 
     <div class="card">
       <div style="display: flex; justify-content: space-between; align-items: center;">
-        <h3 style="margin: 0;">Session Data</h3>
+        <h3 style="margin: 0;">Wonka Table Data</h3>
         <button id="download-csv-btn" class="action-btn">Download CSV</button>
       </div>
       <div class="data-table-container">
@@ -282,8 +284,8 @@
               <th>Rep</th>
               <th>Recovery (s)</th>
               <th>Duration (s)</th>
-              <th>Contractions</th>
-              <th>Timestamps (s)</th>
+              <th>Contraction Count</th>
+              <th>Contraction Timestamps (s)</th>
             </tr>
           </thead>
           <tbody>
@@ -409,6 +411,7 @@
         indexAxis: 'y', // Makes the bar chart render horizontally
         animation: false, // Disables all jumping/redrawing animations
         responsive: true,
+        maintainAspectRatio: false, // Allows dynamic vertical scaling for mobile
         scales: {
           x: { 
             type: 'linear',
@@ -501,7 +504,7 @@
 
     // Event Listener for CSV Download
     elements.downloadCsvBtn.addEventListener('click', () => {
-      let csv = "Repetition,Recovery (s),Duration (s),Contraction Count,Contraction Times (s)\n";
+      let csv = "Repetition,Recovery (s),Duration (s),Contraction Count,Contraction Timestamps (s)\n";
       
       sessionDurations.forEach((duration, index) => {
         const repData = sessionData[index] || [];
@@ -517,7 +520,7 @@
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.setAttribute("href", url);
-      link.setAttribute("download", `wonka_session_${new Date().toISOString().slice(0, 10)}.csv`);
+      link.setAttribute("download", `wonka_session_${datetimeFilename(new Date())}.csv`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -545,7 +548,7 @@
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.setAttribute('href', url);
-      link.setAttribute('download', `wonka_chart_${new Date().toISOString().slice(0, 10)}.png`);
+      link.setAttribute('download', `wonka_chart_${datetimeFilename(new Date())}.png`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -576,6 +579,10 @@
       
       updateChart();
       updateUI(targetReps, targetContractions);
+    }
+
+    function datetimeFilename(datetime) {
+      return datetime.toISOString().slice(0,19).replaceAll(':','-').replace('T','_');
     }
 
     function startHold(targetReps, targetContractions) {
@@ -622,7 +629,23 @@
       updateChart();
 
       const minHoldTime = parseFloat(elements.minHoldTime.value) || 0;
-      if (currentContractions >= targetContractions && elapsed >= minHoldTime) {
+      const maxPostFirst = parseFloat(elements.maxPostFirst.value) || Infinity;
+      
+      let shouldEnd = false;
+      
+      // Minimum Hold Time dominates: we only evaluate auto-ending if the min time has passed
+      if (elapsed >= minHoldTime) {
+        if (currentContractions >= targetContractions) {
+          shouldEnd = true;
+        } else if (firstContractionTime) {
+          const elapsedSinceFirst = (performance.now() - firstContractionTime) / 1000;
+          if (elapsedSinceFirst >= maxPostFirst) {
+            shouldEnd = true;
+          }
+        }
+      }
+
+      if (shouldEnd) {
         if (navigator.vibrate) navigator.vibrate([100, 50, 100]); // distinct finish vibration
         endRepetition();
       } else {
@@ -641,16 +664,15 @@
         
         let shouldEnd = false;
 
-        // Auto-end if target contractions met AND minimum hold time met
-        if (currentContractions >= targetContractions && elapsed >= minHoldTime) {
-          shouldEnd = true;
-        }
-
-        // Auto-end if max time after first contraction is exceeded
-        if (firstContractionTime) {
-          const elapsedSinceFirst = (performance.now() - firstContractionTime) / 1000;
-          if (elapsedSinceFirst >= maxPostFirst) {
+        // Minimum Hold Time dominates: we only evaluate auto-ending if the min time has passed
+        if (elapsed >= minHoldTime) {
+          if (currentContractions >= targetContractions) {
             shouldEnd = true;
+          } else if (firstContractionTime) {
+            const elapsedSinceFirst = (performance.now() - firstContractionTime) / 1000;
+            if (elapsedSinceFirst >= maxPostFirst) {
+              shouldEnd = true;
+            }
           }
         }
 
@@ -744,8 +766,9 @@
           label: `Rep ${index + 1}`,
           data: repData.map(time => ({ x: time, y: index + 1 })),
           backgroundColor: '#03dac6',
-          pointRadius: 6,
-          pointHoverRadius: 8
+          pointStyle: 'rectRot', // Renders as diamonds
+          pointRadius: 7,
+          pointHoverRadius: 9
         });
       });
 
@@ -753,8 +776,15 @@
       
       // Ensure the chart's Y-axis expands dynamically if the user does bonus reps beyond the target
       const targetReps = parseInt(elements.targetReps.value);
-      scatterChart.options.scales.y.max = Math.max(targetReps, sessionData.length) + 1;
+      const maxReps = Math.max(targetReps, sessionData.length);
+      scatterChart.options.scales.y.max = maxReps + 1;
       
+      // Dynamically scale the canvas container height to prevent overlap on mobile devices.
+      // 35px height per repetition allows for the 20px bar + a 15px gap. Plus 80px for the axes/padding.
+      const chartContainer = document.getElementById('chart-container');
+      const requiredHeight = Math.max(300, maxReps * 35 + 80);
+      chartContainer.style.height = `${requiredHeight}px`;
+
       scatterChart.update();
 
       renderTable();
