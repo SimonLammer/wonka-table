@@ -161,6 +161,21 @@
       background-color: var(--danger);
       color: #fff;
     }
+    #reset-config-btn {
+      grid-column: 1 / -1;
+      margin-top: 5px;
+      padding: 10px;
+      font-size: 0.9rem;
+      border: 1px dashed #444;
+      border-radius: 8px;
+      background: transparent;
+      color: #aaa;
+      cursor: pointer;
+      transition: background-color 0.2s, color 0.2s, transform 0.1s;
+    }
+    #reset-config-btn:active {
+      transform: scale(0.98);
+    }
     .btn-idle { background-color: var(--secondary); color: #000; }
     .btn-holding { background-color: var(--danger); color: #fff; }
     .btn-resting { background-color: var(--primary); color: #000; }
@@ -243,6 +258,7 @@
         <label for="sound-enabled" class="help-label" title="Play an audible chime when a repetition automatically completes." style="width: auto;">End sound on repetition completion (Ding)</label>
         <input type="checkbox" id="sound-enabled" checked style="margin-top: 0; width: 20px; height: 20px; cursor: pointer;">
       </div>
+      <button id="reset-config-btn">Reset Configuration to Defaults</button>
     </div>
 
     <div class="card stats">
@@ -325,11 +341,84 @@
       mainBtn: document.getElementById('main-btn'),
       endRepBtn: document.getElementById('end-rep-btn'),
       resetBtn: document.getElementById('reset-btn'),
+      resetConfigBtn: document.getElementById('reset-config-btn'),
       downloadCsvBtn: document.getElementById('download-csv-btn'),
       exportChartBtn: document.getElementById('export-chart-btn'),
       dataTableBody: document.querySelector('#data-table tbody'),
       ctx: document.getElementById('chart').getContext('2d')
     };
+
+    // Configuration Management
+    const DEFAULT_CONFIG = {
+      targetReps: '8',
+      targetContractions: '25',
+      minHoldTime: '',
+      maxPostFirst: '',
+      minRecoveryTime: '1.0',
+      soundEnabled: true
+    };
+
+    function loadConfig() {
+      elements.targetReps.value = localStorage.getItem('wonka_targetReps') ?? DEFAULT_CONFIG.targetReps;
+      elements.targetContractions.value = localStorage.getItem('wonka_targetContractions') ?? DEFAULT_CONFIG.targetContractions;
+      elements.minHoldTime.value = localStorage.getItem('wonka_minHoldTime') ?? DEFAULT_CONFIG.minHoldTime;
+      elements.maxPostFirst.value = localStorage.getItem('wonka_maxPostFirst') ?? DEFAULT_CONFIG.maxPostFirst;
+      elements.minRecoveryTime.value = localStorage.getItem('wonka_minRecoveryTime') ?? DEFAULT_CONFIG.minRecoveryTime;
+      
+      const soundStored = localStorage.getItem('wonka_soundEnabled');
+      elements.soundEnabled.checked = soundStored !== null ? soundStored === 'true' : DEFAULT_CONFIG.soundEnabled;
+    }
+
+    function saveConfig() {
+      localStorage.setItem('wonka_targetReps', elements.targetReps.value);
+      localStorage.setItem('wonka_targetContractions', elements.targetContractions.value);
+      localStorage.setItem('wonka_minHoldTime', elements.minHoldTime.value);
+      localStorage.setItem('wonka_maxPostFirst', elements.maxPostFirst.value);
+      localStorage.setItem('wonka_minRecoveryTime', elements.minRecoveryTime.value);
+      localStorage.setItem('wonka_soundEnabled', elements.soundEnabled.checked);
+    }
+
+    // Auto-save configuration on any input change
+    [elements.targetReps, elements.targetContractions, elements.minHoldTime, elements.maxPostFirst, elements.minRecoveryTime, elements.soundEnabled].forEach(el => {
+      el.addEventListener('input', () => {
+        saveConfig();
+        if (state === 'IDLE') {
+          updateUI(parseInt(elements.targetReps.value) || 1, parseInt(elements.targetContractions.value) || 1);
+          updateChart();
+        }
+      });
+    });
+
+    // Reset Configuration Button (2-tap to bypass iframe confirm issues)
+    let resetConfigTimeout = null;
+    elements.resetConfigBtn.addEventListener('click', () => {
+      if (resetConfigTimeout) {
+        clearTimeout(resetConfigTimeout);
+        resetConfigTimeout = null;
+        elements.resetConfigBtn.innerText = 'Reset Configuration to Defaults';
+        
+        // Restore defaults
+        elements.targetReps.value = DEFAULT_CONFIG.targetReps;
+        elements.targetContractions.value = DEFAULT_CONFIG.targetContractions;
+        elements.minHoldTime.value = DEFAULT_CONFIG.minHoldTime;
+        elements.maxPostFirst.value = DEFAULT_CONFIG.maxPostFirst;
+        elements.minRecoveryTime.value = DEFAULT_CONFIG.minRecoveryTime;
+        elements.soundEnabled.checked = DEFAULT_CONFIG.soundEnabled;
+        saveConfig();
+        
+        if (state === 'IDLE') {
+          updateUI(parseInt(elements.targetReps.value) || 1, parseInt(elements.targetContractions.value) || 1);
+          updateChart();
+        }
+      } else {
+        elements.resetConfigBtn.innerText = 'Are you sure? Tap again to reset defaults';
+        if (navigator.vibrate) navigator.vibrate(50);
+        resetConfigTimeout = setTimeout(() => {
+          resetConfigTimeout = null;
+          elements.resetConfigBtn.innerText = 'Reset Configuration to Defaults';
+        }, 3000);
+      }
+    });
 
     // Global Spacebar listener for main button activation
     document.addEventListener('keydown', (e) => {
@@ -732,7 +821,7 @@
       elements.resetBtn.style.display = 'none';
       elements.resetBtn.innerText = 'Reset Session'; // Ensure text is reset for next time
       updateChart();
-      updateUI(parseInt(elements.targetReps.value), parseInt(elements.targetContractions.value));
+      updateUI(parseInt(elements.targetReps.value) || 1, parseInt(elements.targetContractions.value) || 1);
     }
 
     function updateChart() {
@@ -775,7 +864,7 @@
       scatterChart.data.datasets = datasets;
       
       // Ensure the chart's Y-axis expands dynamically if the user does bonus reps beyond the target
-      const targetReps = parseInt(elements.targetReps.value);
+      const targetReps = parseInt(elements.targetReps.value) || 1;
       const maxReps = Math.max(targetReps, sessionData.length);
       scatterChart.options.scales.y.max = maxReps + 1;
       
@@ -823,7 +912,8 @@
     }
 
     // Initialize UI
-    updateUI(parseInt(elements.targetReps.value), parseInt(elements.targetContractions.value));
+    loadConfig();
+    updateUI(parseInt(elements.targetReps.value) || 1, parseInt(elements.targetContractions.value) || 1);
     renderTable();
   </script>
 </body>
