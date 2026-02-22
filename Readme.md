@@ -10,6 +10,7 @@ It allows you to configure several parameters.
 
 Here is my first session:
 ![Screenshot of my first wonka table; tracked by this tool.](screenshot.png)
+I'm sure you can do better. ;)
 
 ---
 
