@@ -1,7 +1,8 @@
 # Wonka Table Tracker
 
 Increase your CO2 tolerance and thereby your breath-hold time efficiently and safely.
-Instead of purely relying on the clock (as CO2 tables usually do), Wonka tables focus on your body's feedback - diaphram contractions.
+Instead of purely relying on the clock (as CO2 tables usually do), Wonka tables focus on your body's feedback: diaphram contractions.
+A breathhold is completed once you hit a certain number of contractions or some time has passed since the first contraction.
 [Learn more about wonka tables on here.](https://getstamina.app/blog/wonka-tables)
 
 This website tracks one of your Wonka table sessions, logging how long each breath hold was, how long your recovery time between breath hold repetitions is, and when exactly the contractions occurred for each repetition.
@@ -27,6 +28,6 @@ Hint: On PC you can hit the space bar to trigger the main button.
 
 ---
 
-I have vibe-coded this tool for myself (using Gemini 3) since the stamina app locks wonka tables behind a paywall.
+I have vibe-coded this tool (using Gemini 3 Pro) since the stamina app locks wonka tables behind a paywall.
 
 Any improvement suggestions and bug reports are welcome.
