@@ -4,6 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Wonka Table Tracker</title>
+  
+  <!-- PWA Meta Tags -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#121212">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="icon-192.png">
+
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root {
@@ -420,6 +428,37 @@
   </div>
 
   <script>
+    // PWA Service Worker Registration
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js')
+          .catch(err => console.log('Service Worker registration failed: ', err));
+      });
+    }
+
+    // Screen Wake Lock API
+    let wakeLock = null;
+    async function requestWakeLock() {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+        } catch (err) {
+          console.warn(`Wake Lock error: ${err.message}`);
+        }
+      }
+    }
+    function releaseWakeLock() {
+      if (wakeLock !== null) {
+        wakeLock.release().then(() => { wakeLock = null; });
+      }
+    }
+    // Re-request wake lock if tab becomes visible again during a hold
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && state === 'HOLDING') {
+        requestWakeLock();
+      }
+    });
+
     // State Management
     let state = 'IDLE'; // IDLE, HOLDING, RESTING
     let currentRep = 1;
@@ -824,6 +863,8 @@
       restStartTime = performance.now(); // Start tracking recovery time right now
       cancelAnimationFrame(timerInterval);
       
+      releaseWakeLock(); // Release screen wake lock
+      
       const isVictory = currentRep === targetReps;
       playDing(isVictory);
       
@@ -843,6 +884,8 @@
       }
 
       state = 'HOLDING';
+      requestWakeLock(); // Keep screen alive during hold
+      
       currentContractions = 0;
       firstContractionTime = null;
       sessionData[currentRep - 1] = []; 
@@ -970,6 +1013,7 @@
 
     function resetSession() {
       state = 'IDLE';
+      releaseWakeLock(); // Release screen wake lock
       currentRep = 1;
       currentContractions = 0;
       sessionData = [];
