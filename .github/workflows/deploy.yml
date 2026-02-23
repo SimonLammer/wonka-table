@@ -1,10 +1,10 @@
-name: Deploy Main and PWA to GitHub Pages
+name: Deploy Main and Debug to GitHub Pages
 
 on:
   push:
     branches:
       - main
-      - pwa # Trigger deploy when either branch updates
+      - debug # Trigger deploy when either branch updates
 
 permissions:
   contents: write
@@ -19,14 +19,14 @@ jobs:
           ref: main
           path: main-site
 
-      - name: Checkout PWA Branch
+      - name: Checkout Debug Branch
         uses: actions/checkout@v4
         with:
-          ref: pwa
-          path: main-site/pwa # Puts the PWA branch inside a folder
+          ref: debug
+          path: main-site/debug # Puts the debug branch inside a folder
 
       - name: Remove nested .git folder so Git treats it as normal files
-        run: rm -rf main-site/pwa/.git
+        run: rm -rf main-site/debug/.git
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
