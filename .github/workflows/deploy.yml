@@ -25,6 +25,9 @@ jobs:
           ref: pwa
           path: main-site/pwa # Puts the PWA branch inside a folder
 
+      - name: Remove nested .git folder so Git treats it as normal files
+        run: rm -rf main-site/pwa/.git
+
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
