@@ -6,6 +6,9 @@ on:
       - main
       - pwa # Trigger deploy when either branch updates
 
+permissions:
+  contents: write
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
