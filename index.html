@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wonka Table Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg-color: #121212;
+      --surface-color: #1e1e1e;
+      --text-color: #ffffff;
+      --primary: #bb86fc;
+      --secondary: #03dac6;
+      --danger: #cf6679;
+    }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .container {
+      width: 100%;
+      max-width: 800px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .card {
+      background-color: var(--surface-color);
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+    .help-label {
+      cursor: help;
+      border-bottom: 1px dotted #888;
+      width: fit-content;
+      font-size: 0.9rem;
+      white-space: nowrap;
+    }
+    .settings {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 15px;
+    }
+    @media (min-width: 720px) {
+      .settings {
+        grid-template-columns: 1fr 1fr;
+      }
+      .full-width {
+        grid-column: 1 / -1;
+      }
+    }
+    @media (max-width: 719px) {
+      .help-label {
+        white-space: normal;
+      }
+    }
+    .setting-group {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+    }
+    input {
+      background: #2c2c2c;
+      border: 1px solid #444;
+      color: white;
+      padding: 8px;
+      border-radius: 4px;
+      font-size: 16px;
+      margin-top: 4px;
+    }
+    .stats {
+      text-align: center;
+      font-size: 1.2rem;
+      position: relative;
+    }
+    .stat-block {
+      text-align: left;
+      margin-bottom: 5px;
+    }
+    .stat-block div:first-child {
+      text-align: center;
+      margin-bottom: 5px;
+    }
+    .progress-bg {
+      width: 100%;
+      height: 8px;
+      background-color: #333;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background-color: var(--primary);
+      transition: width 0.3s ease;
+    }
+    .timer {
+      font-size: 3rem;
+      font-variant-numeric: tabular-nums;
+      font-weight: bold;
+      color: var(--primary);
+      margin: 10px 0;
+    }
+    .button-group {
+      display: flex;
+      width: 100%;
+      gap: 10px;
+    }
+    #main-btn {
+      flex: 1;
+      padding: 30px;
+      font-size: 1.5rem;
+      font-weight: bold;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background-color 0.2s, transform 0.1s;
+      text-transform: uppercase;
+    }
+    #main-btn:active {
+      transform: scale(0.98);
+    }
+    #end-rep-btn {
+      width: 80px;
+      font-size: 1rem;
+      font-weight: bold;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      background-color: #444;
+      color: #fff;
+      transition: background-color 0.2s, transform 0.1s;
+      text-transform: uppercase;
+    }
+    #end-rep-btn:active {
+      transform: scale(0.95);
+    }
+    #reset-btn {
+      width: 100%;
+      margin-top: 15px;
+      padding: 15px;
+      font-size: 1.1rem;
+      font-weight: bold;
+      border: 2px solid var(--danger);
+      border-radius: 12px;
+      cursor: pointer;
+      background-color: transparent;
+      color: var(--danger);
+      transition: background-color 0.2s, transform 0.1s, color 0.2s;
+      text-transform: uppercase;
+    }
+    #reset-btn:active {
+      transform: scale(0.98);
+      background-color: var(--danger);
+      color: #fff;
+    }
+    #reset-config-btn {
+      grid-column: 1 / -1;
+      margin-top: 5px;
+      padding: 10px;
+      font-size: 0.9rem;
+      border: 1px dashed #444;
+      border-radius: 8px;
+      background: transparent;
+      color: #aaa;
+      cursor: pointer;
+      transition: background-color 0.2s, color 0.2s, transform 0.1s;
+    }
+    #reset-config-btn:active {
+      transform: scale(0.98);
+    }
+    .btn-idle { background-color: var(--secondary); color: #000; }
+    .btn-holding { background-color: var(--danger); color: #fff; }
+    .btn-resting { background-color: var(--primary); color: #000; }
+
+    /* Expanded Mode Styles */
+    .stats.expanded {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 9999;
+      border-radius: 0;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      background-color: var(--surface-color);
+      padding: 5vh 5vw;
+      overflow-y: auto;
+    }
+    .stats.expanded .button-group {
+      flex-direction: column;
+      flex: 1;
+      margin-top: 15px;
+    }
+    .stats.expanded #main-btn {
+      flex: 1;
+      font-size: clamp(2rem, 8vw, 5rem);
+    }
+    .stats.expanded #end-rep-btn {
+      width: 100%;
+      padding: 20px;
+      font-size: 1.5rem;
+    }
+    .stats.expanded #reset-btn {
+      margin-top: 10px;
+    }
+    
+    canvas {
+      width: 100%;
+      margin-top: 20px;
+    }
+
+    .data-table-container {
+      overflow-x: auto;
+      margin-top: 15px;
+    }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.9rem;
+    }
+    .data-table th, .data-table td {
+      padding: 10px;
+      border-bottom: 1px solid #333;
+    }
+    .data-table th {
+      background-color: #2c2c2c;
+      color: var(--secondary);
+      font-weight: bold;
+    }
+    .data-table tr:hover {
+      background-color: #2a2a2a;
+    }
+    .action-btn {
+      padding: 10px 15px;
+      font-size: 0.9rem;
+      font-weight: bold;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      background-color: var(--primary);
+      color: #000;
+      transition: background-color 0.2s, transform 0.1s;
+    }
+    .action-btn:active {
+      transform: scale(0.95);
+    }
+
+    /* Header Section with dynamic margin for smaller screens */
+    .header-section {
+      text-align: center;
+      margin-bottom: -10px;
+    }
+    @media (max-width: 550px) {
+      .header-section {
+        margin-top: 45px;
+      }
+    }
+
+    /* GitHub Ribbon Styles */
+    .github-corner {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 130px;
+      height: 130px;
+      display: block;
+      text-decoration: none;
+      z-index: 100;
+      overflow: hidden;
+    }
+    .github-corner svg {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 80px;
+      height: 80px;
+    }
+    .github-corner-text {
+      position: absolute;
+      width: 130px;
+      height: 20px;
+      line-height: 20px;
+      top: 38px;
+      left: 20px;
+      transform: rotate(45deg);
+      color: var(--primary);
+      font-size: 0.65rem;
+      font-weight: bold;
+      text-align: center;
+      pointer-events: none;
+    }
+    .github-corner:hover .octo-arm {
+      animation: octocat-wave 560ms ease-in-out;
+    }
+    @keyframes octocat-wave {
+      0%, 100% { transform: rotate(0); }
+      20%, 60% { transform: rotate(-25deg); }
+      40%, 80% { transform: rotate(10deg); }
+    }
+    @media (max-width: 500px) {
+      .github-corner:hover .octo-arm { animation: none; }
+      .github-corner .octo-arm { animation: octocat-wave 560ms ease-in-out; }
+    }
+  </style>
+</head>
+<body>
+
+  <a href="https://github.com/SimonLammer/wonka-table" class="github-corner" aria-label="View source on GitHub" target="_blank" rel="noopener noreferrer">
+    <svg viewBox="0 0 250 250" style="fill:var(--primary); color:var(--bg-color); border: 0;" aria-hidden="true">
+      <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path>
+      <path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path>
+      <path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path>
+    </svg>
+    <div class="github-corner-text">Contribute on GitHub</div>
+  </a>
+
+  <div class="container">
+    <div class="header-section">
+      <h1 style="margin-bottom: 5px;">Wonka Table Tracker</h1>
+      <p style="color: #aaa; font-size: 0.9rem; margin-top: 0;">
+        A tool for improving breath holds. <a href="https://getstamina.app/blog/wonka-tables" target="_blank" style="color: var(--secondary); text-decoration: none; border-bottom: 1px solid var(--secondary);">Learn how Wonka Tables work</a>.
+      </p>
+    </div>
+
+    <div class="card settings">
+      <div class="setting-group">
+        <label for="target-reps" class="help-label" title="Total number of breath hold repetitions for this training session.">Target Reps</label>
+        <input type="number" id="target-reps" value="8" min="1">
+      </div>
+      <div class="setting-group">
+        <label for="target-contractions" class="help-label" title="Target number of diaphragm contractions to reach before a repetition is considered complete.">Contractions / Rep</label>
+        <input type="number" id="target-contractions" value="25" min="1">
+      </div>
+      <div class="setting-group">
+        <label for="min-hold-time" class="help-label" title="The repetition won't automatically end until this duration is reached, even if you hit your target contractions or the max hold time after the first contraction has passed.">Min. Hold Time (s) [optional]</label>
+        <input type="number" id="min-hold-time" placeholder="e.g. 60">
+      </div>
+      <div class="setting-group">
+        <label for="max-post-first" class="help-label" title="The repetition will automatically end this many seconds after your first logged contraction (unless the minimum hold time has not been met yet).">Max. Hold Time after First Contraction (s) [optional]</label>
+        <input type="number" id="max-post-first" placeholder="e.g. 60">
+      </div>
+      <div class="setting-group">
+        <label for="min-recovery-time" class="help-label" title="Prevents accidental double-clicks by ignoring starts for this duration after a hold ends.">Min. Recovery Time (s)</label>
+        <input type="number" id="min-recovery-time" value="1.0" min="0" step="0.1">
+      </div>
+      <div class="setting-group checkbox-group full-width" style="flex-direction: row; align-items: center; gap: 10px; padding-top: 10px;">
+        <label for="contraction-sound-enabled" class="help-label" title="Play a short blip sound when logging a contraction." style="width: auto;">Sound on Contraction Logging (Blip)</label>
+        <input type="checkbox" id="contraction-sound-enabled" checked style="margin-top: 0; width: 20px; height: 20px; cursor: pointer;">
+      </div>
+      <div class="setting-group checkbox-group full-width" style="flex-direction: row; align-items: center; gap: 10px; padding-top: 5px;">
+        <label for="sound-enabled" class="help-label" title="Play an audible chime when a repetition automatically completes." style="width: auto;">Sound on Repetition Completion (Ding)</label>
+        <input type="checkbox" id="sound-enabled" checked style="margin-top: 0; width: 20px; height: 20px; cursor: pointer;">
+      </div>
+      <button id="reset-config-btn">Reset Configuration to Defaults</button>
+    </div>
+
+    <div class="card stats" id="stats-card">
+      <button id="expand-btn" title="Toggle Fullscreen Panel" style="position: absolute; top: 10px; right: 10px; background: none; border: none; color: #888; cursor: pointer; font-size: 1.5rem; padding: 5px; line-height: 1;">⛶</button>
+      
+      <div class="stat-block">
+        <div id="rep-display">Repetition: 1 / 8</div>
+        <div class="progress-bg"><div id="rep-progress" class="progress-fill"></div></div>
+      </div>
+      <div class="stat-block" style="margin-top: 15px;">
+        <div id="contraction-display">Contractions: 0 / 25</div>
+        <div class="progress-bg"><div id="contraction-progress" class="progress-fill" style="background-color: var(--secondary);"></div></div>
+      </div>
+      <div class="timer" id="timer-display">0.0s</div>
+      <div class="button-group">
+        <button id="main-btn" class="btn-idle">Start Rep 1</button>
+        <button id="end-rep-btn" style="display: none;">End Rep</button>
+      </div>
+      <button id="reset-btn" style="display: none;">Reset Session</button>
+    </div>
+
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <h3 style="margin: 0;">Wonka Table Chart</h3>
+        <button id="export-chart-btn" class="action-btn">Export Image</button>
+      </div>
+      <div id="chart-container" style="position: relative; width: 100%; height: 300px;">
+        <canvas id="chart"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="margin: 0;">Wonka Table Data</h3>
+        <button id="download-csv-btn" class="action-btn">Download CSV</button>
+      </div>
+      <div class="data-table-container">
+        <table class="data-table" id="data-table">
+          <thead>
+            <tr>
+              <th>Rep</th>
+              <th>Recovery (s)</th>
+              <th>Duration (s)</th>
+              <th>Contraction Count</th>
+              <th>Contraction Timestamps (s)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Data will be populated here -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // State Management
+    let state = 'IDLE'; // IDLE, HOLDING, RESTING
+    let currentRep = 1;
+    let currentContractions = 0;
+    let startTime = 0;
+    let timerInterval = null;
+    let sessionData = []; // Array of arrays containing contraction timestamps per rep
+    let sessionDurations = []; // Tracks total duration of each rep
+    let sessionRestDurations = []; // Tracks recovery time BEFORE each rep
+    let firstContractionTime = null;
+    let restStartTime = 0;
+    let isExpanded = false;
+
+    // DOM Elements
+    const elements = {
+      targetReps: document.getElementById('target-reps'),
+      targetContractions: document.getElementById('target-contractions'),
+      minHoldTime: document.getElementById('min-hold-time'),
+      maxPostFirst: document.getElementById('max-post-first'),
+      minRecoveryTime: document.getElementById('min-recovery-time'),
+      soundEnabled: document.getElementById('sound-enabled'),
+      contractionSoundEnabled: document.getElementById('contraction-sound-enabled'),
+      statsCard: document.getElementById('stats-card'),
+      expandBtn: document.getElementById('expand-btn'),
+      repDisplay: document.getElementById('rep-display'),
+      contractionDisplay: document.getElementById('contraction-display'),
+      repProgress: document.getElementById('rep-progress'),
+      contractionProgress: document.getElementById('contraction-progress'),
+      timerDisplay: document.getElementById('timer-display'),
+      mainBtn: document.getElementById('main-btn'),
+      endRepBtn: document.getElementById('end-rep-btn'),
+      resetBtn: document.getElementById('reset-btn'),
+      resetConfigBtn: document.getElementById('reset-config-btn'),
+      downloadCsvBtn: document.getElementById('download-csv-btn'),
+      exportChartBtn: document.getElementById('export-chart-btn'),
+      dataTableBody: document.querySelector('#data-table tbody'),
+      ctx: document.getElementById('chart').getContext('2d')
+    };
+
+    // Configuration Management
+    const DEFAULT_CONFIG = {
+      targetReps: '8',
+      targetContractions: '25',
+      minHoldTime: '',
+      maxPostFirst: '',
+      minRecoveryTime: '1.0',
+      contractionSoundEnabled: true,
+      soundEnabled: true
+    };
+
+    function loadConfig() {
+      elements.targetReps.value = localStorage.getItem('wonka_targetReps') ?? DEFAULT_CONFIG.targetReps;
+      elements.targetContractions.value = localStorage.getItem('wonka_targetContractions') ?? DEFAULT_CONFIG.targetContractions;
+      elements.minHoldTime.value = localStorage.getItem('wonka_minHoldTime') ?? DEFAULT_CONFIG.minHoldTime;
+      elements.maxPostFirst.value = localStorage.getItem('wonka_maxPostFirst') ?? DEFAULT_CONFIG.maxPostFirst;
+      elements.minRecoveryTime.value = localStorage.getItem('wonka_minRecoveryTime') ?? DEFAULT_CONFIG.minRecoveryTime;
+      
+      const contractionSoundStored = localStorage.getItem('wonka_contractionSoundEnabled');
+      elements.contractionSoundEnabled.checked = contractionSoundStored !== null ? contractionSoundStored === 'true' : DEFAULT_CONFIG.contractionSoundEnabled;
+
+      const soundStored = localStorage.getItem('wonka_soundEnabled');
+      elements.soundEnabled.checked = soundStored !== null ? soundStored === 'true' : DEFAULT_CONFIG.soundEnabled;
+    }
+
+    function saveConfig() {
+      localStorage.setItem('wonka_targetReps', elements.targetReps.value);
+      localStorage.setItem('wonka_targetContractions', elements.targetContractions.value);
+      localStorage.setItem('wonka_minHoldTime', elements.minHoldTime.value);
+      localStorage.setItem('wonka_maxPostFirst', elements.maxPostFirst.value);
+      localStorage.setItem('wonka_minRecoveryTime', elements.minRecoveryTime.value);
+      localStorage.setItem('wonka_contractionSoundEnabled', elements.contractionSoundEnabled.checked);
+      localStorage.setItem('wonka_soundEnabled', elements.soundEnabled.checked);
+    }
+
+    // Auto-save configuration on any input change
+    [elements.targetReps, elements.targetContractions, elements.minHoldTime, elements.maxPostFirst, elements.minRecoveryTime, elements.contractionSoundEnabled, elements.soundEnabled].forEach(el => {
+      el.addEventListener('input', () => {
+        saveConfig();
+        if (state === 'IDLE') {
+          updateUI(parseInt(elements.targetReps.value) || 1, parseInt(elements.targetContractions.value) || 1);
+          updateChart();
+        }
+      });
+    });
+
+    // Reset Configuration Button (2-tap to bypass iframe confirm issues)
+    let resetConfigTimeout = null;
+    elements.resetConfigBtn.addEventListener('click', () => {
+      if (resetConfigTimeout) {
+        clearTimeout(resetConfigTimeout);
+        resetConfigTimeout = null;
+        elements.resetConfigBtn.innerText = 'Reset Configuration to Defaults';
+        
+        // Restore defaults
+        elements.targetReps.value = DEFAULT_CONFIG.targetReps;
+        elements.targetContractions.value = DEFAULT_CONFIG.targetContractions;
+        elements.minHoldTime.value = DEFAULT_CONFIG.minHoldTime;
+        elements.maxPostFirst.value = DEFAULT_CONFIG.maxPostFirst;
+        elements.minRecoveryTime.value = DEFAULT_CONFIG.minRecoveryTime;
+        elements.contractionSoundEnabled.checked = DEFAULT_CONFIG.contractionSoundEnabled;
+        elements.soundEnabled.checked = DEFAULT_CONFIG.soundEnabled;
+        saveConfig();
+        
+        if (state === 'IDLE') {
+          updateUI(parseInt(elements.targetReps.value) || 1, parseInt(elements.targetContractions.value) || 1);
+          updateChart();
+        }
+      } else {
+        elements.resetConfigBtn.innerText = 'Are you sure? Tap again to reset defaults';
+        if (navigator.vibrate) navigator.vibrate(50);
+        resetConfigTimeout = setTimeout(() => {
+          resetConfigTimeout = null;
+          elements.resetConfigBtn.innerText = 'Reset Configuration to Defaults';
+        }, 3000);
+      }
+    });
+
+    // Fullscreen / Expand logic
+    elements.expandBtn.addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevent triggering the card's background click
+      isExpanded = !isExpanded;
+      if (isExpanded) {
+        elements.statsCard.classList.add('expanded');
+        elements.expandBtn.innerText = '✖';
+        document.querySelector('.github-corner').style.display = 'none'; // Hide ribbon
+        document.body.style.overflow = 'hidden'; // Hide main page scrollbar
+      } else {
+        elements.statsCard.classList.remove('expanded');
+        elements.expandBtn.innerText = '⛶';
+        document.querySelector('.github-corner').style.display = 'block';
+        document.body.style.overflow = ''; // Restore main page scrollbar
+      }
+    });
+
+    // Clicking anywhere on the stats card when expanded triggers the main button
+    elements.statsCard.addEventListener('click', (e) => {
+      if (isExpanded) {
+        // Exclude specific actionable buttons so they still function normally
+        if (e.target !== elements.expandBtn && 
+            e.target !== elements.endRepBtn && 
+            e.target !== elements.resetBtn && 
+            e.target !== elements.mainBtn) {
+          elements.mainBtn.click();
+        }
+      }
+    });
+
+    // Global Spacebar listener for main button activation
+    document.addEventListener('keydown', (e) => {
+      // Trigger if Space is pressed, but ignore if the user is typing inside an input field
+      if (e.code === 'Space' && document.activeElement.tagName !== 'INPUT') {
+        e.preventDefault(); // Prevents page from scrolling down and prevents double-clicks if focused
+        elements.mainBtn.click();
+      }
+    });
+
+    // Audio Setup
+    let audioCtx = null;
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    function playTick() {
+      if (!elements.contractionSoundEnabled.checked || !audioCtx) return;
+      try {
+        const osc = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(600, audioCtx.currentTime); 
+        gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime); 
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+        osc.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        osc.start(audioCtx.currentTime);
+        osc.stop(audioCtx.currentTime + 0.1);
+      } catch(e) { console.error("Audio error", e); }
+    }
+
+    function playDing(isVictory = false) {
+      if (!elements.soundEnabled.checked || !audioCtx) return;
+      try {
+        if (isVictory) {
+          // Play a quick C major arpeggio for hitting the target rep
+          const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+          notes.forEach((freq, i) => {
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime + i * 0.15);
+            gainNode.gain.setValueAtTime(0, audioCtx.currentTime + i * 0.15);
+            gainNode.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + i * 0.15 + 0.05);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + i * 0.15 + 0.4);
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            osc.start(audioCtx.currentTime + i * 0.15);
+            osc.stop(audioCtx.currentTime + i * 0.15 + 0.4);
+          });
+        } else {
+          // Standard single ding
+          const osc = audioCtx.createOscillator();
+          const gainNode = audioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(1046.50, audioCtx.currentTime); // C6 Note
+          
+          // Sharper attack for instant feedback
+          gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime); 
+          gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
+          
+          osc.connect(gainNode);
+          gainNode.connect(audioCtx.destination);
+          osc.start(audioCtx.currentTime);
+          osc.stop(audioCtx.currentTime + 0.5);
+        }
+      } catch(e) { console.error("Audio error", e); }
+    }
+
+    // Chart.js Plugin to ensure background color on export
+    const customCanvasBackgroundColor = {
+      id: 'customCanvasBackgroundColor',
+      beforeDraw: (chart, args, options) => {
+        const {ctx} = chart;
+        ctx.save();
+        ctx.globalCompositeOperation = 'destination-over';
+        ctx.fillStyle = options.color || '#1e1e1e';
+        ctx.fillRect(0, 0, chart.width, chart.height);
+        ctx.restore();
+      }
+    };
+
+    // Chart.js Setup
+    let scatterChart = new Chart(elements.ctx, {
+      type: 'scatter',
+      data: { datasets: [] },
+      plugins: [customCanvasBackgroundColor],
+      options: {
+        indexAxis: 'y', // Makes the bar chart render horizontally
+        animation: false, // Disables all jumping/redrawing animations
+        responsive: true,
+        maintainAspectRatio: false, // Allows dynamic vertical scaling for mobile
+        scales: {
+          x: { 
+            type: 'linear',
+            title: { display: true, text: 'Time (Seconds)', color: '#fff' }, 
+            grid: { color: '#444' }, 
+            ticks: { color: '#fff' }
+            // 'min: 0' removed to allow the negative axis for recovery times
+          },
+          y: { 
+            type: 'linear',
+            title: { display: true, text: 'Repetition', color: '#fff' }, 
+            grid: { color: '#444' }, 
+            ticks: { color: '#fff', stepSize: 1, precision: 0 },
+            min: 0,
+            reverse: true // Inverts the Y axis so rep 1 starts at the top
+          }
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: { 
+            callbacks: { 
+              label: (ctx) => {
+                if (ctx.dataset.label === 'Recovery Time') {
+                  // Display absolute value so it doesn't show negative seconds
+                  return `Recovery: ${Math.abs(ctx.raw.x).toFixed(1)}s`;
+                }
+                if (ctx.dataset.type === 'bar') {
+                  return `Total Duration: ${ctx.raw.x.toFixed(1)}s`;
+                }
+                return `Contraction at ${ctx.raw.x.toFixed(1)}s`;
+              }
+            } 
+          },
+          customCanvasBackgroundColor: {
+            color: '#1e1e1e'
+          }
+        }
+      }
+    });
+
+    // Event Listener for the big button
+    elements.mainBtn.addEventListener('click', () => {
+      initAudio(); // Unlock audio context safely on user interaction
+      
+      // Haptic feedback (supported on most Android devices)
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
+      }
+
+      const targetReps = parseInt(elements.targetReps.value);
+      const targetContractions = parseInt(elements.targetContractions.value);
+
+      if (state === 'RESTING') {
+        const minRecovery = parseFloat(elements.minRecoveryTime.value) || 0;
+        const elapsedRest = (performance.now() - restStartTime) / 1000;
+        
+        // Block the start action if minimum recovery time hasn't passed
+        if (elapsedRest < minRecovery) {
+          return;
+        }
+        startHold(targetReps, targetContractions);
+      } else if (state === 'IDLE') {
+        startHold(targetReps, targetContractions);
+      } else if (state === 'HOLDING') {
+        logContraction(targetReps, targetContractions);
+      }
+    });
+
+    // Manual reset button with 2-tap confirmation to bypass iframe restrictions
+    let resetConfirmTimeout = null;
+    elements.resetBtn.addEventListener('click', () => {
+      if (resetConfirmTimeout) {
+        // Second tap confirmed: execute reset
+        clearTimeout(resetConfirmTimeout);
+        resetConfirmTimeout = null;
+        elements.resetBtn.innerText = 'Reset Session';
+        resetSession();
+      } else {
+        // First tap: prompt for confirmation
+        elements.resetBtn.innerText = 'Are you sure? Tap again to reset';
+        if (navigator.vibrate) navigator.vibrate(50);
+        
+        // Cancel confirmation state after 3 seconds
+        resetConfirmTimeout = setTimeout(() => {
+          resetConfirmTimeout = null;
+          elements.resetBtn.innerText = 'Reset Session';
+        }, 3000);
+      }
+    });
+
+    // Event Listener for CSV Download
+    elements.downloadCsvBtn.addEventListener('click', () => {
+      let csv = "Repetition,Recovery (s),Duration (s),Contraction Count,Contraction Timestamps (s)\n";
+      
+      sessionDurations.forEach((duration, index) => {
+        const repData = sessionData[index] || [];
+        const restStr = (sessionRestDurations[index] || 0).toFixed(1);
+        const durationStr = (duration || 0).toFixed(1);
+        const count = repData.length;
+        // Wrap timestamps array in quotes to prevent CSV cell shifting
+        const times = `"${repData.map(t => t.toFixed(1)).join(', ')}"`; 
+        csv += `${index + 1},${restStr},${durationStr},${count},${times}\n`;
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `wonka_session_${datetimeFilename(new Date())}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    });
+
+    // Event Listener for Chart Export
+    elements.exportChartBtn.addEventListener('click', () => {
+      // Get the image data URI from Chart.js
+      const dataURI = scatterChart.toBase64Image();
+      
+      // Convert Data URI to a Blob to bypass iframe download restrictions
+      const byteString = atob(dataURI.split(',')[1]);
+      const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      
+      for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+      }
+      
+      const blob = new Blob([ab], { type: mimeString });
+      
+      // Trigger download using the allowed Blob URL format
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `wonka_chart_${datetimeFilename(new Date())}.png`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url); // Clean up memory
+    });
+
+    // Event Listener for premature end button
+    elements.endRepBtn.addEventListener('click', () => {
+      if (state !== 'HOLDING') return;
+      if (navigator.vibrate) navigator.vibrate(50);
+      
+      endRepetition();
+    });
+
+    function endRepetition() {
+      const targetReps = parseInt(elements.targetReps.value);
+      const targetContractions = parseInt(elements.targetContractions.value);
+      const elapsed = (performance.now() - startTime) / 1000;
+      
+      sessionDurations[currentRep - 1] = elapsed;
+      restStartTime = performance.now(); // Start tracking recovery time right now
+      cancelAnimationFrame(timerInterval);
+      
+      const isVictory = currentRep === targetReps;
+      playDing(isVictory);
+      
+      state = 'RESTING';
+      
+      updateChart();
+      updateUI(targetReps, targetContractions);
+    }
+
+    function datetimeFilename(datetime) {
+      return datetime.toISOString().slice(0,19).replaceAll(':','-').replace('T','_');
+    }
+
+    function startHold(targetReps, targetContractions) {
+      if (currentRep === 1) {
+        elements.resetBtn.style.display = 'block';
+      }
+
+      state = 'HOLDING';
+      currentContractions = 0;
+      firstContractionTime = null;
+      sessionData[currentRep - 1] = []; 
+      sessionDurations[currentRep - 1] = 0; // Initialize duration to start drawing bar
+      
+      // Calculate recovery time (if not the first repetition)
+      if (currentRep > 1) {
+        sessionRestDurations[currentRep - 1] = (performance.now() - restStartTime) / 1000;
+      } else {
+        sessionRestDurations[currentRep - 1] = 0;
+      }
+
+      elements.targetReps.disabled = true;
+      elements.targetContractions.disabled = true;
+      elements.minHoldTime.disabled = true;
+      elements.maxPostFirst.disabled = true;
+      elements.minRecoveryTime.disabled = true;
+
+      updateUI(targetReps, targetContractions);
+      updateChart(); // Redraw chart immediately to show the logged recovery time
+      
+      startTime = performance.now();
+      timerInterval = requestAnimationFrame(updateTimer);
+    }
+
+    function logContraction(targetReps, targetContractions) {
+      playTick(); // Instant audio feedback for logging
+      
+      const elapsed = (performance.now() - startTime) / 1000;
+      currentContractions++;
+      
+      if (currentContractions === 1) {
+        firstContractionTime = performance.now();
+      }
+
+      sessionData[currentRep - 1].push(elapsed);
+      sessionDurations[currentRep - 1] = elapsed; // Grow bar width continuously per point
+      updateChart();
+
+      const minHoldTime = parseFloat(elements.minHoldTime.value) || 0;
+      const maxPostFirst = parseFloat(elements.maxPostFirst.value) || Infinity;
+      
+      let shouldEnd = false;
+      
+      // Minimum Hold Time dominates: we only evaluate auto-ending if the min time has passed
+      if (elapsed >= minHoldTime) {
+        if (currentContractions >= targetContractions) {
+          shouldEnd = true;
+        } else if (firstContractionTime) {
+          const elapsedSinceFirst = (performance.now() - firstContractionTime) / 1000;
+          if (elapsedSinceFirst >= maxPostFirst) {
+            shouldEnd = true;
+          }
+        }
+      }
+
+      if (shouldEnd) {
+        if (navigator.vibrate) navigator.vibrate([100, 50, 100]); // distinct finish vibration
+        endRepetition();
+      } else {
+        updateUI(targetReps, targetContractions);
+      }
+    }
+
+    function updateTimer() {
+      const elapsed = (performance.now() - startTime) / 1000;
+      elements.timerDisplay.innerText = elapsed.toFixed(1) + 's';
+      
+      if (state === 'HOLDING') {
+        const targetContractions = parseInt(elements.targetContractions.value);
+        const minHoldTime = parseFloat(elements.minHoldTime.value) || 0;
+        const maxPostFirst = parseFloat(elements.maxPostFirst.value) || Infinity;
+        
+        let shouldEnd = false;
+
+        // Minimum Hold Time dominates: we only evaluate auto-ending if the min time has passed
+        if (elapsed >= minHoldTime) {
+          if (currentContractions >= targetContractions) {
+            shouldEnd = true;
+          } else if (firstContractionTime) {
+            const elapsedSinceFirst = (performance.now() - firstContractionTime) / 1000;
+            if (elapsedSinceFirst >= maxPostFirst) {
+              shouldEnd = true;
+            }
+          }
+        }
+
+        if (shouldEnd) {
+          if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+          endRepetition();
+        } else {
+          timerInterval = requestAnimationFrame(updateTimer);
+        }
+      }
+    }
+
+    function updateUI(targetReps, targetContractions) {
+      elements.repDisplay.innerText = `Repetition: ${currentRep} / ${targetReps}`;
+      elements.contractionDisplay.innerText = `Contractions: ${currentContractions} / ${targetContractions}`;
+
+      elements.mainBtn.className = '';
+      if (state === 'IDLE') {
+        elements.mainBtn.classList.add('btn-idle');
+        elements.mainBtn.innerText = `Start Rep ${currentRep}`;
+        elements.endRepBtn.style.display = 'none';
+      } else if (state === 'HOLDING') {
+        elements.mainBtn.classList.add('btn-holding');
+        elements.mainBtn.innerText = 'Log Contraction';
+        elements.endRepBtn.style.display = 'block'; // Reveal end button during hold
+      } else if (state === 'RESTING') {
+        elements.mainBtn.classList.add('btn-resting');
+        elements.mainBtn.innerText = 'Breathe. Ready for Next Rep?';
+        elements.endRepBtn.style.display = 'none';
+        currentRep++; // Increment ready for the next hold
+      }
+
+      // Update Progress Bars
+      const completedReps = currentRep - 1;
+      const repPct = (completedReps / targetReps) * 100;
+      elements.repProgress.style.width = `${Math.min(100, Math.max(0, repPct))}%`;
+      
+      const contPct = (currentContractions / targetContractions) * 100;
+      elements.contractionProgress.style.width = `${Math.min(100, contPct)}%`;
+    }
+
+    function resetSession() {
+      state = 'IDLE';
+      currentRep = 1;
+      currentContractions = 0;
+      sessionData = [];
+      sessionDurations = [];
+      sessionRestDurations = [];
+      firstContractionTime = null;
+      restStartTime = 0;
+      elements.timerDisplay.innerText = '0.0s';
+      elements.targetReps.disabled = false;
+      elements.targetContractions.disabled = false;
+      elements.minHoldTime.disabled = false;
+      elements.maxPostFirst.disabled = false;
+      elements.minRecoveryTime.disabled = false;
+      elements.resetBtn.style.display = 'none';
+      elements.resetBtn.innerText = 'Reset Session'; // Ensure text is reset for next time
+      updateChart();
+      updateUI(parseInt(elements.targetReps.value) || 1, parseInt(elements.targetContractions.value) || 1);
+    }
+
+    function updateChart() {
+      const datasets = [];
+
+      // Add the recovery duration bar (drawn into the negative x-axis)
+      datasets.push({
+        type: 'bar',
+        label: 'Recovery Time',
+        // By supplying negative x values, the bar draws to the left of the 0 mark
+        data: sessionRestDurations.map((time, index) => ({ x: -(time || 0), y: index + 1 })),
+        backgroundColor: 'rgba(187, 134, 252, 0.4)', // Muted primary color (purple)
+        barThickness: 20,
+        grouped: false // Prevents Chart.js from offsetting multiple bar datasets
+      });
+
+      // Add the grey duration bar behind the dots
+      datasets.push({
+        type: 'bar',
+        label: 'Duration',
+        data: sessionDurations.map((time, index) => ({ x: time || 0, y: index + 1 })),
+        backgroundColor: 'rgba(255, 255, 255, 0.15)',
+        barThickness: 20,
+        grouped: false // Aligns this bar exactly with the scatter dots and recovery bar
+      });
+
+      // Add scatter points for contractions
+      sessionData.forEach((repData, index) => {
+        datasets.push({
+          type: 'scatter',
+          label: `Rep ${index + 1}`,
+          data: repData.map(time => ({ x: time, y: index + 1 })),
+          backgroundColor: '#03dac6',
+          pointStyle: 'rectRot', // Renders as diamonds
+          pointRadius: 7,
+          pointHoverRadius: 9
+        });
+      });
+
+      scatterChart.data.datasets = datasets;
+      
+      // Ensure the chart's Y-axis expands dynamically if the user does bonus reps beyond the target
+      const targetReps = parseInt(elements.targetReps.value) || 1;
+      const maxReps = Math.max(targetReps, sessionData.length);
+      scatterChart.options.scales.y.max = maxReps + 1;
+      
+      // Dynamically scale the canvas container height to prevent overlap on mobile devices.
+      // 35px height per repetition allows for the 20px bar + a 15px gap. Plus 80px for the axes/padding.
+      const chartContainer = document.getElementById('chart-container');
+      const requiredHeight = Math.max(300, maxReps * 35 + 80);
+      chartContainer.style.height = `${requiredHeight}px`;
+
+      scatterChart.update();
+
+      renderTable();
+    }
+
+    function renderTable() {
+      elements.dataTableBody.innerHTML = '';
+      
+      sessionDurations.forEach((duration, index) => {
+        const repData = sessionData[index] || [];
+        const tr = document.createElement('tr');
+        
+        const tdRep = document.createElement('td');
+        tdRep.innerText = index + 1;
+
+        const tdRest = document.createElement('td');
+        tdRest.innerText = (sessionRestDurations[index] || 0).toFixed(1);
+        
+        const tdDuration = document.createElement('td');
+        tdDuration.innerText = (duration || 0).toFixed(1);
+        
+        const tdCount = document.createElement('td');
+        tdCount.innerText = repData.length;
+        
+        const tdTimes = document.createElement('td');
+        tdTimes.innerText = repData.map(t => t.toFixed(1)).join(', ');
+        
+        tr.appendChild(tdRep);
+        tr.appendChild(tdRest);
+        tr.appendChild(tdDuration);
+        tr.appendChild(tdCount);
+        tr.appendChild(tdTimes);
+        
+        elements.dataTableBody.appendChild(tr);
+      });
+    }
+
+    // Initialize UI
+    loadConfig();
+    updateUI(parseInt(elements.targetReps.value) || 1, parseInt(elements.targetContractions.value) || 1);
+    renderTable();
+  </script>
+</body>
+</html>
