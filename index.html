@@ -79,6 +79,7 @@
     .stats {
       text-align: center;
       font-size: 1.2rem;
+      position: relative;
     }
     .stat-block {
       text-align: left;
@@ -179,6 +180,40 @@
     .btn-idle { background-color: var(--secondary); color: #000; }
     .btn-holding { background-color: var(--danger); color: #fff; }
     .btn-resting { background-color: var(--primary); color: #000; }
+
+    /* Expanded Mode Styles */
+    .stats.expanded {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 9999;
+      border-radius: 0;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      background-color: var(--surface-color);
+      padding: 5vh 5vw;
+      overflow-y: auto;
+    }
+    .stats.expanded .button-group {
+      flex-direction: column;
+      flex: 1;
+      margin-top: 15px;
+    }
+    .stats.expanded #main-btn {
+      flex: 1;
+      font-size: clamp(2rem, 8vw, 5rem);
+    }
+    .stats.expanded #end-rep-btn {
+      width: 100%;
+      padding: 20px;
+      font-size: 1.5rem;
+    }
+    .stats.expanded #reset-btn {
+      margin-top: 10px;
+    }
     
     canvas {
       width: 100%;
@@ -321,13 +356,19 @@
         <input type="number" id="min-recovery-time" value="1.0" min="0" step="0.1">
       </div>
       <div class="setting-group checkbox-group full-width" style="flex-direction: row; align-items: center; gap: 10px; padding-top: 10px;">
+        <label for="contraction-sound-enabled" class="help-label" title="Play a short blip sound when logging a contraction." style="width: auto;">Sound on Contraction Logging (Blip)</label>
+        <input type="checkbox" id="contraction-sound-enabled" checked style="margin-top: 0; width: 20px; height: 20px; cursor: pointer;">
+      </div>
+      <div class="setting-group checkbox-group full-width" style="flex-direction: row; align-items: center; gap: 10px; padding-top: 5px;">
         <label for="sound-enabled" class="help-label" title="Play an audible chime when a repetition automatically completes." style="width: auto;">Sound on Repetition Completion (Ding)</label>
         <input type="checkbox" id="sound-enabled" checked style="margin-top: 0; width: 20px; height: 20px; cursor: pointer;">
       </div>
       <button id="reset-config-btn">Reset Configuration to Defaults</button>
     </div>
 
-    <div class="card stats">
+    <div class="card stats" id="stats-card">
+      <button id="expand-btn" title="Toggle Fullscreen Panel" style="position: absolute; top: 10px; right: 10px; background: none; border: none; color: #888; cursor: pointer; font-size: 1.5rem; padding: 5px; line-height: 1;">⛶</button>
+      
       <div class="stat-block">
         <div id="rep-display">Repetition: 1 / 8</div>
         <div class="progress-bg"><div id="rep-progress" class="progress-fill"></div></div>
@@ -390,6 +431,7 @@
     let sessionRestDurations = []; // Tracks recovery time BEFORE each rep
     let firstContractionTime = null;
     let restStartTime = 0;
+    let isExpanded = false;
 
     // DOM Elements
     const elements = {
@@ -399,6 +441,9 @@
       maxPostFirst: document.getElementById('max-post-first'),
       minRecoveryTime: document.getElementById('min-recovery-time'),
       soundEnabled: document.getElementById('sound-enabled'),
+      contractionSoundEnabled: document.getElementById('contraction-sound-enabled'),
+      statsCard: document.getElementById('stats-card'),
+      expandBtn: document.getElementById('expand-btn'),
       repDisplay: document.getElementById('rep-display'),
       contractionDisplay: document.getElementById('contraction-display'),
       repProgress: document.getElementById('rep-progress'),
@@ -421,6 +466,7 @@
       minHoldTime: '',
       maxPostFirst: '',
       minRecoveryTime: '1.0',
+      contractionSoundEnabled: true,
       soundEnabled: true
     };
 
@@ -431,6 +477,9 @@
       elements.maxPostFirst.value = localStorage.getItem('wonka_maxPostFirst') ?? DEFAULT_CONFIG.maxPostFirst;
       elements.minRecoveryTime.value = localStorage.getItem('wonka_minRecoveryTime') ?? DEFAULT_CONFIG.minRecoveryTime;
       
+      const contractionSoundStored = localStorage.getItem('wonka_contractionSoundEnabled');
+      elements.contractionSoundEnabled.checked = contractionSoundStored !== null ? contractionSoundStored === 'true' : DEFAULT_CONFIG.contractionSoundEnabled;
+
       const soundStored = localStorage.getItem('wonka_soundEnabled');
       elements.soundEnabled.checked = soundStored !== null ? soundStored === 'true' : DEFAULT_CONFIG.soundEnabled;
     }
@@ -441,11 +490,12 @@
       localStorage.setItem('wonka_minHoldTime', elements.minHoldTime.value);
       localStorage.setItem('wonka_maxPostFirst', elements.maxPostFirst.value);
       localStorage.setItem('wonka_minRecoveryTime', elements.minRecoveryTime.value);
+      localStorage.setItem('wonka_contractionSoundEnabled', elements.contractionSoundEnabled.checked);
       localStorage.setItem('wonka_soundEnabled', elements.soundEnabled.checked);
     }
 
     // Auto-save configuration on any input change
-    [elements.targetReps, elements.targetContractions, elements.minHoldTime, elements.maxPostFirst, elements.minRecoveryTime, elements.soundEnabled].forEach(el => {
+    [elements.targetReps, elements.targetContractions, elements.minHoldTime, elements.maxPostFirst, elements.minRecoveryTime, elements.contractionSoundEnabled, elements.soundEnabled].forEach(el => {
       el.addEventListener('input', () => {
         saveConfig();
         if (state === 'IDLE') {
@@ -469,6 +519,7 @@
         elements.minHoldTime.value = DEFAULT_CONFIG.minHoldTime;
         elements.maxPostFirst.value = DEFAULT_CONFIG.maxPostFirst;
         elements.minRecoveryTime.value = DEFAULT_CONFIG.minRecoveryTime;
+        elements.contractionSoundEnabled.checked = DEFAULT_CONFIG.contractionSoundEnabled;
         elements.soundEnabled.checked = DEFAULT_CONFIG.soundEnabled;
         saveConfig();
         
@@ -483,6 +534,36 @@
           resetConfigTimeout = null;
           elements.resetConfigBtn.innerText = 'Reset Configuration to Defaults';
         }, 3000);
+      }
+    });
+
+    // Fullscreen / Expand logic
+    elements.expandBtn.addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevent triggering the card's background click
+      isExpanded = !isExpanded;
+      if (isExpanded) {
+        elements.statsCard.classList.add('expanded');
+        elements.expandBtn.innerText = '✖';
+        document.querySelector('.github-corner').style.display = 'none'; // Hide ribbon
+        document.body.style.overflow = 'hidden'; // Hide main page scrollbar
+      } else {
+        elements.statsCard.classList.remove('expanded');
+        elements.expandBtn.innerText = '⛶';
+        document.querySelector('.github-corner').style.display = 'block';
+        document.body.style.overflow = ''; // Restore main page scrollbar
+      }
+    });
+
+    // Clicking anywhere on the stats card when expanded triggers the main button
+    elements.statsCard.addEventListener('click', (e) => {
+      if (isExpanded) {
+        // Exclude specific actionable buttons so they still function normally
+        if (e.target !== elements.expandBtn && 
+            e.target !== elements.endRepBtn && 
+            e.target !== elements.resetBtn && 
+            e.target !== elements.mainBtn) {
+          elements.mainBtn.click();
+        }
       }
     });
 
@@ -504,6 +585,22 @@
       if (audioCtx.state === 'suspended') {
         audioCtx.resume();
       }
+    }
+
+    function playTick() {
+      if (!elements.contractionSoundEnabled.checked || !audioCtx) return;
+      try {
+        const osc = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(600, audioCtx.currentTime); 
+        gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime); 
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+        osc.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        osc.start(audioCtx.currentTime);
+        osc.stop(audioCtx.currentTime + 0.1);
+      } catch(e) { console.error("Audio error", e); }
     }
 
     function playDing(isVictory = false) {
@@ -772,6 +869,8 @@
     }
 
     function logContraction(targetReps, targetContractions) {
+      playTick(); // Instant audio feedback for logging
+      
       const elapsed = (performance.now() - startTime) / 1000;
       currentContractions++;
       

@@ -24,7 +24,9 @@ Several parameters are configurable:
 | Max. hold time after first contraction [s] (optional) | Delay the completion of a breath hold (repetition) at least this many seconds after the first contraction, even if you have already hit your contractions/rep goal. | Default: empty<br/>The blog mentions 45s and 60s. |
 | Min. recovery time [s] | Minimum duration of the recovery time between two consecutive breath holds in seconds. This mainly exists to prevent accidentally starting the next repetition without noticing that the previous one has been completed. | Default: 1.0s |
 
-Hint: On PC you can hit the space bar to trigger the main button.
+Hints:
+- On PC you can hit the space bar to trigger the main button.
+- When extending the main panel, any click that is not on a button (e.g., on the timer) is handled as if the main button is clicked. This is especially helpful when using the website on a smartphone.
 
 ---
 
