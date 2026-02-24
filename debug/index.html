@@ -629,17 +629,20 @@
     function playTick() {
       if (!elements.contractionSoundEnabled.checked || !audioCtx) return;
       try {
-        const now = audioCtx.currentTime;
+        const lookahead = 0.01;
+        const now = audioCtx.currentTime + lookahead;
         const osc = audioCtx.createOscillator();
         const gainNode = audioCtx.createGain();
         
         osc.type = 'square';
-        osc.frequency.setValueAtTime(600, now);
+        osc.frequency.setValueAtTime(600, now); 
         
-        // Reset and schedule gain immediately to avoid volume inconsistencies from rapid clicks
+        // Reset and schedule gain with a tiny linear attack to ensure it hits 
+        // the target volume before decaying, preventing "missing" or "quiet" blips.
         gainNode.gain.cancelScheduledValues(now);
-        gainNode.gain.setValueAtTime(0.1, now);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+        gainNode.gain.setValueAtTime(0, audioCtx.currentTime); // Start at zero instantly
+        gainNode.gain.linearRampToValueAtTime(0.2, now);      // Quick attack to target
+        gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.1); // Decay
         
         osc.connect(gainNode);
         gainNode.connect(audioCtx.destination);
@@ -651,7 +654,8 @@
     function playDing(isVictory = false) {
       if (!elements.soundEnabled.checked || !audioCtx) return;
       try {
-        const now = audioCtx.currentTime;
+        const lookahead = 0.01;
+        const now = audioCtx.currentTime + lookahead;
         if (isVictory) {
           // Play a quick C major arpeggio for hitting the target rep
           const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
@@ -682,7 +686,8 @@
           osc.frequency.setValueAtTime(1046.50, now); // C6 Note
           
           gainNode.gain.cancelScheduledValues(now);
-          gainNode.gain.setValueAtTime(0.5, now);
+          gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+          gainNode.gain.linearRampToValueAtTime(0.5, now); 
           gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
           
           osc.connect(gainNode);
