@@ -632,13 +632,13 @@
         const now = audioCtx.currentTime;
         const osc = audioCtx.createOscillator();
         const gainNode = audioCtx.createGain();
+        
         osc.type = 'square';
-        osc.frequency.setValueAtTime(600, now); 
-
-        // --- AUDIO FIX: Locked-down envelope for volume consistency ---
+        osc.frequency.setValueAtTime(600, now);
+        
+        // Reset and schedule gain immediately to avoid volume inconsistencies from rapid clicks
         gainNode.gain.cancelScheduledValues(now);
-        gainNode.gain.setValueAtTime(0, now); 
-        gainNode.gain.linearRampToValueAtTime(0.12, now + 0.005); 
+        gainNode.gain.setValueAtTime(0.1, now);
         gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
         
         osc.connect(gainNode);
@@ -656,34 +656,33 @@
           // Play a quick C major arpeggio for hitting the target rep
           const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
           notes.forEach((freq, i) => {
-            const startT = now + i * 0.15;
             const osc = audioCtx.createOscillator();
             const gainNode = audioCtx.createGain();
+            const noteStart = now + i * 0.15;
+            
             osc.type = 'sine';
-            osc.frequency.setValueAtTime(freq, startT);
-
-            // Audio fix for arpeggio notes
-            gainNode.gain.cancelScheduledValues(startT);
-            gainNode.gain.setValueAtTime(0, startT);
-            gainNode.gain.linearRampToValueAtTime(0.3, startT + 0.01);
-            gainNode.gain.exponentialRampToValueAtTime(0.001, startT + 0.4);
+            osc.frequency.setValueAtTime(freq, noteStart);
+            
+            gainNode.gain.cancelScheduledValues(now);
+            gainNode.gain.setValueAtTime(0, noteStart);
+            gainNode.gain.linearRampToValueAtTime(0.3, noteStart + 0.05);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, noteStart + 0.4);
             
             osc.connect(gainNode);
             gainNode.connect(audioCtx.destination);
-            osc.start(startT);
-            osc.stop(startT + 0.4);
+            osc.start(noteStart);
+            osc.stop(noteStart + 0.4);
           });
         } else {
           // Standard single ding
           const osc = audioCtx.createOscillator();
           const gainNode = audioCtx.createGain();
+          
           osc.type = 'sine';
           osc.frequency.setValueAtTime(1046.50, now); // C6 Note
           
-          // Audio fix for single ding
           gainNode.gain.cancelScheduledValues(now);
-          gainNode.gain.setValueAtTime(0, now);
-          gainNode.gain.linearRampToValueAtTime(0.5, now + 0.01); 
+          gainNode.gain.setValueAtTime(0.5, now);
           gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
           
           osc.connect(gainNode);
@@ -723,7 +722,6 @@
             title: { display: true, text: 'Time (Seconds)', color: '#fff' }, 
             grid: { color: '#444' }, 
             ticks: { color: '#fff' }
-            // 'min: 0' removed to allow the negative axis for recovery times
           },
           y: { 
             type: 'linear',
