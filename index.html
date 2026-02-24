@@ -364,6 +364,10 @@
         <input type="number" id="min-recovery-time" value="1.0" min="0" step="0.1">
       </div>
       <div class="setting-group checkbox-group full-width" style="flex-direction: row; align-items: center; gap: 10px; padding-top: 10px;">
+        <label for="start-sound-enabled" class="help-label" title="Play a snappy double-tone when a repetition starts (hold begins)." style="width: auto;">Sound on Repetition Start</label>
+        <input type="checkbox" id="start-sound-enabled" checked style="margin-top: 0; width: 20px; height: 20px; cursor: pointer;">
+      </div>
+      <div class="setting-group checkbox-group full-width" style="flex-direction: row; align-items: center; gap: 10px; padding-top: 5px;">
         <label for="contraction-sound-enabled" class="help-label" title="Play a short blip sound when logging a contraction." style="width: auto;">Sound on Contraction Logging (Blip)</label>
         <input type="checkbox" id="contraction-sound-enabled" checked style="margin-top: 0; width: 20px; height: 20px; cursor: pointer;">
       </div>
@@ -480,6 +484,7 @@
       maxPostFirst: document.getElementById('max-post-first'),
       minRecoveryTime: document.getElementById('min-recovery-time'),
       soundEnabled: document.getElementById('sound-enabled'),
+      startSoundEnabled: document.getElementById('start-sound-enabled'),
       contractionSoundEnabled: document.getElementById('contraction-sound-enabled'),
       statsCard: document.getElementById('stats-card'),
       expandBtn: document.getElementById('expand-btn'),
@@ -505,6 +510,7 @@
       minHoldTime: '',
       maxPostFirst: '',
       minRecoveryTime: '1.0',
+      startSoundEnabled: true,
       contractionSoundEnabled: true,
       soundEnabled: true
     };
@@ -516,6 +522,9 @@
       elements.maxPostFirst.value = localStorage.getItem('wonka_maxPostFirst') ?? DEFAULT_CONFIG.maxPostFirst;
       elements.minRecoveryTime.value = localStorage.getItem('wonka_minRecoveryTime') ?? DEFAULT_CONFIG.minRecoveryTime;
       
+      const startSoundStored = localStorage.getItem('wonka_startSoundEnabled');
+      elements.startSoundEnabled.checked = startSoundStored !== null ? startSoundStored === 'true' : DEFAULT_CONFIG.startSoundEnabled;
+
       const contractionSoundStored = localStorage.getItem('wonka_contractionSoundEnabled');
       elements.contractionSoundEnabled.checked = contractionSoundStored !== null ? contractionSoundStored === 'true' : DEFAULT_CONFIG.contractionSoundEnabled;
 
@@ -529,12 +538,13 @@
       localStorage.setItem('wonka_minHoldTime', elements.minHoldTime.value);
       localStorage.setItem('wonka_maxPostFirst', elements.maxPostFirst.value);
       localStorage.setItem('wonka_minRecoveryTime', elements.minRecoveryTime.value);
+      localStorage.setItem('wonka_startSoundEnabled', elements.startSoundEnabled.checked);
       localStorage.setItem('wonka_contractionSoundEnabled', elements.contractionSoundEnabled.checked);
       localStorage.setItem('wonka_soundEnabled', elements.soundEnabled.checked);
     }
 
     // Auto-save configuration on any input change
-    [elements.targetReps, elements.targetContractions, elements.minHoldTime, elements.maxPostFirst, elements.minRecoveryTime, elements.contractionSoundEnabled, elements.soundEnabled].forEach(el => {
+    [elements.targetReps, elements.targetContractions, elements.minHoldTime, elements.maxPostFirst, elements.minRecoveryTime, elements.startSoundEnabled, elements.contractionSoundEnabled, elements.soundEnabled].forEach(el => {
       el.addEventListener('input', () => {
         saveConfig();
         if (state === 'IDLE') {
@@ -558,6 +568,7 @@
         elements.minHoldTime.value = DEFAULT_CONFIG.minHoldTime;
         elements.maxPostFirst.value = DEFAULT_CONFIG.maxPostFirst;
         elements.minRecoveryTime.value = DEFAULT_CONFIG.minRecoveryTime;
+        elements.startSoundEnabled.checked = DEFAULT_CONFIG.startSoundEnabled;
         elements.contractionSoundEnabled.checked = DEFAULT_CONFIG.contractionSoundEnabled;
         elements.soundEnabled.checked = DEFAULT_CONFIG.soundEnabled;
         saveConfig();
@@ -626,6 +637,12 @@
       }
     }
 
+    /**
+     * Volume fix & Snappiness: Use immediate absolute timing (no lookahead).
+     * Linear attack of 2ms ensures every blip triggers at full volume instantly 
+     * without audible "pop" but feels snappy. Triangle wave provides a 
+     * clear, consistent feedback when successions are rapid.
+     */
     function playTick() {
       if (!elements.contractionSoundEnabled.checked || !audioCtx) return;
       try {
@@ -636,9 +653,8 @@
         const osc = audioCtx.createOscillator();
         const gainNode = audioCtx.createGain();
         
-        // Triangle wave is less harsh than square but clearer than sine for overlapping blips
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(800, now); // Slightly higher pitch for "snappier" perception
+        osc.frequency.setValueAtTime(800, now); 
         
         gainNode.gain.cancelScheduledValues(now);
         gainNode.gain.setValueAtTime(0, now); 
@@ -652,6 +668,35 @@
       } catch(e) { console.error("Audio error", e); }
     }
 
+    function playStartSound() {
+      if (!elements.startSoundEnabled.checked || !audioCtx) return;
+      try {
+        const now = audioCtx.currentTime;
+        const attack = 0.002;
+        const decay = 0.1;
+
+        // Play two snappy tones for "start" feedback
+        [0, 0.12].forEach((offset, i) => {
+          const osc = audioCtx.createOscillator();
+          const gainNode = audioCtx.createGain();
+          const trigger = now + offset;
+          
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(i === 0 ? 500 : 700, trigger); 
+          
+          gainNode.gain.cancelScheduledValues(trigger);
+          gainNode.gain.setValueAtTime(0, trigger);
+          gainNode.gain.linearRampToValueAtTime(0.3, trigger + attack);
+          gainNode.gain.linearRampToValueAtTime(0, trigger + attack + decay);
+          
+          osc.connect(gainNode);
+          gainNode.connect(audioCtx.destination);
+          osc.start(trigger);
+          osc.stop(trigger + attack + decay + 0.01);
+        });
+      } catch(e) { console.error("Audio error", e); }
+    }
+
     function playDing(isVictory = false) {
       if (!elements.soundEnabled.checked || !audioCtx) return;
       try {
@@ -662,7 +707,7 @@
           notes.forEach((freq, i) => {
             const osc = audioCtx.createOscillator();
             const gainNode = audioCtx.createGain();
-            const noteStart = now + i * 0.12; // Snappier arpeggio
+            const noteStart = now + i * 0.12; 
             
             osc.type = 'sine';
             osc.frequency.setValueAtTime(freq, noteStart);
@@ -837,22 +882,15 @@
 
     // Event Listener for Chart Export
     elements.exportChartBtn.addEventListener('click', () => {
-      // Get the image data URI from Chart.js
       const dataURI = scatterChart.toBase64Image();
-      
-      // Convert Data URI to a Blob to bypass iframe download restrictions
       const byteString = atob(dataURI.split(',')[1]);
       const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
       const ab = new ArrayBuffer(byteString.length);
       const ia = new Uint8Array(ab);
-      
       for (let i = 0; i < byteString.length; i++) {
         ia[i] = byteString.charCodeAt(i);
       }
-      
       const blob = new Blob([ab], { type: mimeString });
-      
-      // Trigger download using the allowed Blob URL format
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.setAttribute('href', url);
@@ -901,6 +939,7 @@
       }
 
       state = 'HOLDING';
+      playStartSound(); // Feedback whenhold starts
       requestWakeLock(); // Keep screen alive during hold
       
       currentContractions = 0;
