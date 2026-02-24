@@ -1,8 +1,8 @@
 {
   "name": "Wonka Table Tracker",
-  "short_name": "WonkaTable",
+  "short_name": "WonkaTT",
   "description": "A tool for improving breath holds using contraction-based training.",
-  "start_url": "./index.html",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "background_color": "#121212",
