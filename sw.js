@@ -1,4 +1,4 @@
-const CACHE_NAME = 'wonka-cache-v8';
+const CACHE_NAME = 'wonka-cache-v9';
 const ASSETS = [
   './',
   './index.html',
