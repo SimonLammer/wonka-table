@@ -629,32 +629,34 @@
     function playTick() {
       if (!elements.contractionSoundEnabled.checked || !audioCtx) return;
       try {
-        const lookahead = 0.01;
+        const lookahead = 0.02; // Slightly more lookahead for engine stability
         const now = audioCtx.currentTime + lookahead;
+        const attack = 0.005; 
+        const decay = 0.08;
+        
         const osc = audioCtx.createOscillator();
         const gainNode = audioCtx.createGain();
         
-        osc.type = 'square';
+        // Triangle wave has less harmonic interference than square wave when overlapping
+        osc.type = 'triangle';
         osc.frequency.setValueAtTime(600, now); 
         
-        // Reset and schedule gain with a tiny linear attack to ensure it hits 
-        // the target volume before decaying, preventing "missing" or "quiet" blips.
         gainNode.gain.cancelScheduledValues(now);
-        gainNode.gain.setValueAtTime(0, audioCtx.currentTime); // Start at zero instantly
-        gainNode.gain.linearRampToValueAtTime(0.2, now);      // Quick attack to target
-        gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.1); // Decay
+        gainNode.gain.setValueAtTime(0, audioCtx.currentTime); 
+        gainNode.gain.linearRampToValueAtTime(0.2, now + attack);      // Sharp attack
+        gainNode.gain.linearRampToValueAtTime(0, now + attack + decay); // Smooth linear decay
         
         osc.connect(gainNode);
         gainNode.connect(audioCtx.destination);
         osc.start(now);
-        osc.stop(now + 0.1);
+        osc.stop(now + attack + decay + 0.01);
       } catch(e) { console.error("Audio error", e); }
     }
 
     function playDing(isVictory = false) {
       if (!elements.soundEnabled.checked || !audioCtx) return;
       try {
-        const lookahead = 0.01;
+        const lookahead = 0.02;
         const now = audioCtx.currentTime + lookahead;
         if (isVictory) {
           // Play a quick C major arpeggio for hitting the target rep
@@ -687,7 +689,7 @@
           
           gainNode.gain.cancelScheduledValues(now);
           gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-          gainNode.gain.linearRampToValueAtTime(0.5, now); 
+          gainNode.gain.linearRampToValueAtTime(0.5, now + 0.01); 
           gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
           
           osc.connect(gainNode);
